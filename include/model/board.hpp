@@ -244,4 +244,10 @@ const auto affected = [](const auto& matches, auto width) {
   return result;
 };
 
+struct board {
+  std::vector<int> grids;
+  auto scroll = scroll;
+  auto blah = scroll;
+};
+
 }  // match3
