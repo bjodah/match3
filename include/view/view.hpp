@@ -8,8 +8,8 @@
 #pragma once
 
 #include "pph.hpp"
+#include "config.hpp"
 #include "view/icanvas.hpp"
-#include "model/config.hpp"
 
 namespace match3 {
 

@@ -8,11 +8,10 @@
 #pragma once
 
 #include "pph.hpp"
-#include "model/config.hpp"
+#include "config.hpp"
 #include "model/board.hpp"
 #include "view/view.hpp"
 #include "view/animations.hpp"
-#include "controller/logic.hpp"
 
 namespace msm = boost::msm::lite;
 
@@ -21,9 +20,7 @@ namespace match3 {
 using selected = std::vector<short>;
 using randomize = std::function<int(int, int)>;
 using points = int;
-using moves = unsigned int;
-
-/// Events
+using moves = short;
 
 struct touch_down {
   static constexpr auto id = SDL_FINGERDOWN;
@@ -58,13 +55,13 @@ struct button_up {
 };
 
 struct matches {
-  static constexpr auto id = __LINE__;
+  static constexpr auto id = __COUNTER__;
   int arity = 0;
   mutable std::vector<int> matches;
 };
 
 struct time_tick {
-  static constexpr auto id = __LINE__;
+  static constexpr auto id = __COUNTER__;
 };
 
 struct quit {
@@ -77,153 +74,144 @@ struct key_pressed {
   int key = 0;
 };
 
-/// Guards
-
-const auto is_mobile = [] {
-  // clang-format off
-  return bool(EM_ASM_INT_V({return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);}));
-  // clang-format on
-};
-
-const auto has_items = [](const selected& s) { return !s.empty(); };
-
-const auto is_swap_items_winning = [](const board& b, const selected& s,
-                                      const config c) {
-  assert(s.size() >= 2);
-  return is_match(b.grids, s[0], c.board_width) ||
-         is_match(b.grids, s[1], c.board_width);
-};
-
-const auto is_item_winning = [](const board& b, const selected& s,
-                                const config c) {
-  return !s.empty() && is_match(b.grids, s.back(), c.board_width);
-};
-
-const auto is_allowed = [](auto event, const view& v, const selected& s,
-                           const config c) {
-  assert(!s.empty());
-  const auto _1 = s.back();
-  const auto _2 = v.get_position(event.x, event.y);
-  const auto diff = std::abs(_1 - _2);
-  const auto board_size = c.board_width * c.board_height;
-  return (_1 >= 0 && _1 < board_size) && (_2 >= 0 && _2 < board_size) &&
-         (diff == 1 || diff == c.board_width);
-};
-
-const auto is_key = [](int Key) {
-  return [=](auto event) { return event.key == Key; };
-};
-
-/// Actions
-
-const auto select_item = [](auto event, const view& v, selected& s) {
-  s.emplace_back(v.get_position(event.x, event.y));
-};
-
-const auto drop_item = [](selected& s) {
-  assert(!s.empty());
-  s.pop_back();
-};
-
-const auto clear_selected = [](selected& s) { s.clear(); };
-
-const auto swap_items = [](const selected& s, board& b) {
-  assert(s.size() >= 2);
-  std::swap(b.grids[s[0]], b.grids[s[1]]);
-};
-
-const auto find_matches = [](const board& b, auto& m, selected& s,
-                             const config c) {
-  assert(m.arity >= 0);
-  auto arity = m.arity;
-  while (arity--) {
-    m.matches |=
-        ranges::action::push_back(match(b.grids, s.back(), c.board_width));
-    s.pop_back();
-  }
-  m.matches |= ranges::action::sort | ranges::action::unique;
-};
-
-const auto destroy_matches = [](board& b, const auto& m) {
-  ranges::for_each(m.matches, [&](auto i) { b.grids[i] = {}; });
-};
-
-const auto scroll_board = [](board& b, const auto& m, const config c) {
-  ranges::for_each(m.matches,
-                   [&](auto i) { scroll(b.grids, i, c.board_width); });
-};
-
-const auto generate_new = [](board& b, const auto& m, selected& s,
-                             const config c, randomize r) {
-  ranges::action::transform(
-      b.grids, [c, r](auto i) { return i ? i : r(1, c.board_colors); });
-  s |= ranges::action::push_front(affected(m.matches, c.board_width)) |
-       ranges::action::sort | ranges::action::unique;
-};
-
-const auto add_points = [](points& p, const auto& m) { p += m.matches.size(); };
-
-const auto reset = [](config c, board original, board& b, points& p, moves& m,
-                      view& v) {
-  b = original;
-  p = {};
-  m = c.max_moves;
-  v.clear();
-};
-
-const auto show_swap = [](const board& b, const selected& s, animations& a,
-                          view& v, const config c) {
-  assert(s.size() >= 2);
-  using namespace std::chrono_literals;
-  a.queue_animation([b, c, s, &v] {
-    const auto _1 = s[0];
-    const auto _2 = s[1];
-    v.set_grid(_1 % c.board_width, _1 / c.board_width, b.grids[_1]);
-    v.set_grid(_2 % c.board_width, _2 / c.board_width, b.grids[_2]);
-  }, 150ms);
-};
-
-const auto show_board = [](const board& b, animations& a, view& v,
-                           const config c) {
-  using namespace std::chrono_literals;
-  a.queue_animation([b, c, &v] {
-    for (auto i = 0; i < c.board_width * c.board_height; ++i) {
-      v.set_grid(i % c.board_width, i / c.board_width, b.grids[i]);
-    }
-  }, 150ms);
-};
-
-const auto show_matches = [](const auto& m, animations& a, view& v,
-                             const config c) {
-  using namespace std::chrono_literals;
-  a.queue_animation([m, c, &v] {
-    for (auto i : m.matches) {
-      v.update_grid(i % c.board_width, i / c.board_width);
-    }
-  }, 150ms);
-};
-
-const auto show_points = [](view& v, const points& p, animations& a) {
-  using namespace std::chrono_literals;
-  a.queue_animation(
-      [p, &v] { v.set_text("points: " + std::to_string(p), 10, 10); });
-};
-
-const auto show_moves = [](view& v, const moves& m, animations& a) {
-  using namespace std::chrono_literals;
-  a.queue_animation(
-      [m, &v] { v.set_text("moves: " + std::to_string(m), 240, 10); });
-};
-
-const auto show_game_over = [](view& v, animations& a) {
-  using namespace std::chrono_literals;
-  a.queue_animation(
-      [&v] { v.set_text("GAME OVER", 20, 230, 48 /*font size*/); }, 1s);
-};
-
 struct controller {
   auto configure() const noexcept {
     using namespace msm;
+
+    const auto is_mobile = [] {
+      // clang-format off
+      return bool(EM_ASM_INT_V({return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);}));
+      // clang-format on
+    };
+
+    const auto has_items = [](const selected& s) { return !s.empty(); };
+
+    const auto is_swap_items_winning = [](const board& b, const selected& s) {
+      assert(s.size() >= 2);
+      return b.is_match(s[0]) || b.is_match(s[1]);
+    };
+
+    const auto is_item_winning = [](const board& b, const selected& s) {
+      return !s.empty() && b.is_match(s.back());
+    };
+
+    const auto is_allowed = [](auto event, const view& v, const selected& s,
+                               const config c) {
+      assert(!s.empty());
+      const auto _1 = s.back();
+      const auto _2 = v.get_position(event.x, event.y);
+      const auto diff = std::abs(_1 - _2);
+      const auto board_size = c.board_width * c.board_height;
+      return (_1 >= 0 && _1 < board_size) && (_2 >= 0 && _2 < board_size) &&
+             (diff == 1 || diff == c.board_width);
+    };
+
+    const auto is_key = [](int Key) {
+      return [=](auto event) { return event.key == Key; };
+    };
+
+    const auto select_item = [](auto event, const view& v, selected& s) {
+      s.emplace_back(v.get_position(event.x, event.y));
+    };
+
+    const auto drop_item = [](selected& s) {
+      assert(!s.empty());
+      s.pop_back();
+    };
+
+    const auto clear_selected = [](selected& s) { s.clear(); };
+
+    const auto swap_items = [](const selected& s, board& b) {
+      assert(s.size() >= 2);
+      std::swap(b.grids[s[0]], b.grids[s[1]]);
+    };
+
+    const auto find_matches = [](const board& b, auto& m, selected& s) {
+      assert(m.arity >= 0);
+      auto arity = m.arity;
+      while (arity--) {
+        m.matches |=
+            ranges::action::push_back(b.match(s.back()));
+        s.pop_back();
+      }
+      m.matches |= ranges::action::sort | ranges::action::unique;
+    };
+
+    const auto destroy_matches = [](board& b, const auto& m) {
+      ranges::for_each(m.matches, [&](auto i) { b.grids[i] = {}; });
+    };
+
+    const auto scroll_board = [](board& b, const auto& m) {
+      ranges::for_each(m.matches, [&](auto i) { b.scroll(i); });
+    };
+
+    const auto generate_new = [](board& b, const auto& m, selected& s,
+                                 const config c, randomize r) {
+      ranges::action::transform(
+          b.grids, [c, r](auto i) { return i ? i : r(1, c.board_colors); });
+      s |= ranges::action::push_front(b.affected(m.matches)) |
+           ranges::action::sort | ranges::action::unique;
+    };
+
+    const auto add_points = [](points& p, const auto& m) { p += m.matches.size(); };
+
+    const auto reset = [](config c, board original, board& b, points& p, moves& m,
+                          view& v) {
+      b = original;
+      p = {};
+      m = c.max_moves;
+      v.clear();
+    };
+
+    const auto show_swap = [](const board& b, const selected& s, animations& a,
+                              view& v, const config c) {
+      assert(s.size() >= 2);
+      using namespace std::chrono_literals;
+      a.queue_animation([b, c, s, &v] {
+        const auto _1 = s[0];
+        const auto _2 = s[1];
+        v.set_grid(_1 % c.board_width, _1 / c.board_width, b.grids[_1]);
+        v.set_grid(_2 % c.board_width, _2 / c.board_width, b.grids[_2]);
+      }, 150ms);
+    };
+
+    const auto show_board = [](const board& b, animations& a, view& v,
+                               const config c) {
+      using namespace std::chrono_literals;
+      a.queue_animation([b, c, &v] {
+        for (auto i = 0; i < c.board_width * c.board_height; ++i) {
+          v.set_grid(i % c.board_width, i / c.board_width, b.grids[i]);
+        }
+      }, 150ms);
+    };
+
+    const auto show_matches = [](const auto& m, animations& a, view& v,
+                                 const config c) {
+      using namespace std::chrono_literals;
+      a.queue_animation([m, c, &v] {
+        for (auto i : m.matches) {
+          v.update_grid(i % c.board_width, i / c.board_width);
+        }
+      }, 150ms);
+    };
+
+    const auto show_points = [](view& v, const points& p, animations& a) {
+      using namespace std::chrono_literals;
+      a.queue_animation(
+          [p, &v] { v.set_text("points: " + std::to_string(p), 10, 10); });
+    };
+
+    const auto show_moves = [](view& v, const moves& m, animations& a) {
+      using namespace std::chrono_literals;
+      a.queue_animation(
+          [m, &v] { v.set_text("moves: " + std::to_string(m), 240, 10); });
+    };
+
+    const auto show_game_over = [](view& v, animations& a) {
+      using namespace std::chrono_literals;
+      a.queue_animation(
+          [&v] { v.set_text("GAME OVER", 20, 230, 48 /*font size*/); }, 1s);
+    };
 
     const auto reset_and_show = (reset, show_board, show_points, show_moves);
     const auto select_and_swap_items = (select_item, swap_items, show_swap);
