@@ -7,11 +7,12 @@
 //
 #pragma once
 
-#include "pph.hpp"
+#include <iostream>
 #include "config.hpp"
 #include "model/board.hpp"
-#include "view/view.hpp"
+#include "pph.hpp"
 #include "view/animations.hpp"
+#include "view/view.hpp"
 
 namespace msm = boost::msm::lite;
 
@@ -87,11 +88,14 @@ struct controller {
     const auto has_items = [](const selected& s) { return !s.empty(); };
 
     const auto is_swap_items_winning = [](const board& b, const selected& s) {
-      assert(s.size() >= 2);
+      assert(s.size() == 2);
       return b.is_match(s[0]) || b.is_match(s[1]);
     };
 
     const auto is_item_winning = [](const board& b, const selected& s) {
+        if (!s.empty()) {
+            std::cout << s.back() << " " << b.is_match(s.back()) << std::endl;
+        }
       return !s.empty() && b.is_match(s.back());
     };
 
@@ -122,41 +126,46 @@ struct controller {
     const auto clear_selected = [](selected& s) { s.clear(); };
 
     const auto swap_items = [](const selected& s, board& b) {
-      assert(s.size() >= 2);
-      std::swap(b.grids[s[0]], b.grids[s[1]]);
+      assert(s.size() == 2);
+      b.swipe(s[0], s[1]);
     };
 
-    const auto find_matches = [](const board& b, auto& m, selected& s) {
+    const auto add_matches = [](const board& b, auto& m, selected& s) {
       assert(m.arity >= 0);
       auto arity = m.arity;
-      while (arity--) {
-        m.matches |=
-            ranges::action::push_back(b.match(s.back()));
+      while (arity--) { // TODO
+        m.matches |= ranges::action::push_back(b.match(s.back()));
         s.pop_back();
       }
       m.matches |= ranges::action::sort | ranges::action::unique;
     };
 
     const auto destroy_matches = [](board& b, const auto& m) {
-      ranges::for_each(m.matches, [&](auto i) { b.grids[i] = {}; });
+      ranges::for_each(m.matches, [&](const auto i) { b.update(i, {}); });
     };
 
     const auto scroll_board = [](board& b, const auto& m) {
-      ranges::for_each(m.matches, [&](auto i) { b.scroll(i); });
+      ranges::for_each(m.matches, [&](const auto i) { b.scroll(i); });
     };
 
     const auto generate_new = [](board& b, const auto& m, selected& s,
                                  const config c, randomize r) {
-      ranges::action::transform(
-          b.grids, [c, r](auto i) { return i ? i : r(1, c.board_colors); });
-      s |= ranges::action::push_front(b.affected(m.matches)) |
-           ranges::action::sort | ranges::action::unique;
+
+     ranges::action::transform(b.grids, [r, c](auto i) { return i ? i : r(1, c.board_colors); });
+
+      auto&& affected =
+          m.matches | ranges::view::transform([=](const auto m) mutable {
+            return b.update(m, r(1, c.board_colors));
+          });
+      s |= ranges::action::push_front(affected | ranges::view::join) | ranges::action::sort | ranges::action::unique;
     };
 
-    const auto add_points = [](points& p, const auto& m) { p += m.matches.size(); };
+    const auto add_points = [](points& p, const auto& m) {
+      p += m.matches.size();
+    };
 
-    const auto reset = [](config c, board original, board& b, points& p, moves& m,
-                          view& v) {
+    const auto reset = [](config c, board original, board& b, points& p,
+                          moves& m, view& v) {
       b = original;
       p = {};
       m = c.max_moves;
@@ -167,32 +176,38 @@ struct controller {
                               view& v, const config c) {
       assert(s.size() >= 2);
       using namespace std::chrono_literals;
-      a.queue_animation([b, c, s, &v] {
-        const auto _1 = s[0];
-        const auto _2 = s[1];
-        v.set_grid(_1 % c.board_width, _1 / c.board_width, b.grids[_1]);
-        v.set_grid(_2 % c.board_width, _2 / c.board_width, b.grids[_2]);
-      }, 150ms);
+      a.queue_animation(
+          [b, c, s, &v] {
+            const auto _1 = s[0];
+            const auto _2 = s[1];
+            v.set_grid(_1 % c.board_width, _1 / c.board_width, b[_1]);
+            v.set_grid(_2 % c.board_width, _2 / c.board_width, b[_2]);
+          },
+          150ms);
     };
 
     const auto show_board = [](const board& b, animations& a, view& v,
                                const config c) {
       using namespace std::chrono_literals;
-      a.queue_animation([b, c, &v] {
-        for (auto i = 0; i < c.board_width * c.board_height; ++i) {
-          v.set_grid(i % c.board_width, i / c.board_width, b.grids[i]);
-        }
-      }, 150ms);
+      a.queue_animation(
+          [b, c, &v] {
+            for (auto i = 0; i < c.board_width * c.board_height; ++i) {
+              v.set_grid(i % c.board_width, i / c.board_width, b[i]);
+            }
+          },
+          150ms);
     };
 
     const auto show_matches = [](const auto& m, animations& a, view& v,
                                  const config c) {
       using namespace std::chrono_literals;
-      a.queue_animation([m, c, &v] {
-        for (auto i : m.matches) {
-          v.update_grid(i % c.board_width, i / c.board_width);
-        }
-      }, 150ms);
+      a.queue_animation(
+          [m, c, &v] {
+            for (auto i : m.matches) {
+              v.update_grid(i % c.board_width, i / c.board_width);
+            }
+          },
+          150ms);
     };
 
     const auto show_points = [](view& v, const points& p, animations& a) {
@@ -240,7 +255,7 @@ struct controller {
       , "wait_for_first_item"_s  <=   "match_items"_s                               / (swap_items, show_swap, clear_selected)
      // +--------------------------------------------------------------------------------------------------------------------------------------------+
       ,                             *("handle_matches"_s)      + event<matches>     [ has_items and is_item_winning ] / (
-                                                                                       find_matches, show_matches
+                                                                                       add_matches, show_matches
                                                                                      , destroy_matches, show_board
                                                                                      , add_points, show_points
                                                                                      , scroll_board, show_board

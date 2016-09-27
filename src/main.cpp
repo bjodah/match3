@@ -5,10 +5,10 @@
 // (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 //
-#include "model/board.hpp"
-#include "view/sdl_canvas.hpp"
 #include "config.hpp"
 #include "game.hpp"
+#include "model/board.hpp"
+#include "view/sdl_canvas.hpp"
 
 namespace di = boost::di;
 
@@ -26,7 +26,8 @@ auto configuration = []() {
              .board_width = 7,
              .board_height = 10,
              .board_colors = 5,
-             .max_moves = 10}
+             .max_moves = 10,
+             .max_match_length = 3}
     )
 
   , di::bind<board::color_t[]>.to({
@@ -42,7 +43,7 @@ auto configuration = []() {
       1,2,3,4,1,3,4
     })
 
-  , di::bind<randomize>.to([](int begin, int end) {
+  , di::bind<randomize>.to([](const int begin, const int end) {
       static std::random_device rd;
       std::mt19937 gen(rd());
       std::uniform_int_distribution<int> dis(begin, end);
@@ -53,6 +54,6 @@ auto configuration = []() {
 };
 
 int main() {
-  auto injector = di::make_injector(configuration());
+  const auto injector = di::make_injector(configuration());
   injector.create<match3::game>().play();
 }
