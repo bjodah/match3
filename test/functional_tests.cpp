@@ -9,7 +9,7 @@
 #include "common/logger.hpp"
 #include "common/mocks_provider.hpp"
 #include "config.hpp"
-#include "controller/controller.hpp"
+#include "controller/player.hpp"
 #include "model/board.hpp"
 #include "pph.hpp"
 

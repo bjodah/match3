@@ -6,7 +6,7 @@
 // http://www.boost.org/LICENSE_1_0.txt)
 //
 #include "config.hpp"
-#include "controller/controller.hpp"
+#include "controller/player.hpp"
 #include "model/board.hpp"
 
 int main() {

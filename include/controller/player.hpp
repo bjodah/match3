@@ -115,24 +115,6 @@ const auto show_swap = [](const board& b, const selected& s, animations& a,
       150ms);
 };
 
-//const auto show_board = [](const board& b, animations& a, view& v,
-                           //const config c) {
-  //using namespace std::chrono_literals;
-  //a.queue_animation(
-      //[b, c, &v] {
-        //for (auto i = 0; i < c.board_width * c.board_height; ++i) {
-          //v.set_grid(i % c.board_width, i / c.board_width, b[i]);
-        //}
-      //},
-      //150ms);
-//};
-
-//const auto show_points = [](view& v, const points& p, animations& a) {
-  //using namespace std::chrono_literals;
-  //a.queue_animation(
-      //[p, &v] { v.set_text("points: " + std::to_string(p), 10, 10); });
-//};
-
 const auto show_moves = [](view& v, const moves& m, animations& a) {
   using namespace std::chrono_literals;
   a.queue_animation(
@@ -156,7 +138,8 @@ struct controller {
      * Transition table for player
      *
      * \code{.cpp}
-     *   dst_state <= src_state + event [ guard ] / action
+     *  Initial state: *initial
+     *  Transition DSL: dst_state <= src_state + event [ guard ] / action
      * \endcode
      */
     // clang-format off

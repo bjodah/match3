@@ -6,7 +6,7 @@
 // http://www.boost.org/LICENSE_1_0.txt)
 //
 #include <range/v3/algorithm/equal.hpp>
-#include "controller/controller.hpp"
+#include "controller/player.hpp"
 #include "model/board.hpp"
 
 int main() {
