@@ -4,10 +4,12 @@ clone:
 build:
   image: apiaryio/emcc:latest
   commands:
-    - cmake -DCMAKE_CXX_COMPILER=em++ match3
+    - mkdir build
+    - cd build/
+    - cmake -DCMAKE_CXX_COMPILER=em++ ..
     - make web
-    - mkdir -p deploy/$DRONE_BRANCH
-    - cp index.* deploy/$DRONE_BRANCH
+    - mkdir -p ../deploy/$DRONE_BRANCH
+    - cp index.* ../deploy/$DRONE_BRANCH
 
 deploy:
 
