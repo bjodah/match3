@@ -1,0 +1,23 @@
+clone:
+  depth: 5
+  recursive: true
+build:
+  image: apiaryio/emcc:latest
+  commands:
+    - mkdir build
+    - cd build/
+    - cmake -DCMAKE_CXX_COMPILER=em++ ..
+    - make web
+    - mkdir -p ../deploy/$DRONE_BRANCH
+    - cp index.* ../deploy/$DRONE_BRANCH
+
+deploy:
+
+  rsync:
+    host: hera.physchem.kth.se
+    port: 22
+    user: match3
+    source: deploy/
+    target: ~/public_html
+    recursive: true
+    delete: false
